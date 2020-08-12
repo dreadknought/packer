@@ -18,3 +18,17 @@ func (d *Driver) FindContentLibrary(name string) (*Library, error) {
 		driver:  d,
 	}, nil
 }
+
+func (d *Driver) FindContentLibraryItem(libraryId string, name string) (*library.Item, error) {
+	lm := library.NewManager(d.restClient)
+	items, err := lm.GetLibraryItems(d.ctx, libraryId)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		if item.Name == name {
+			return &item, nil
+		}
+	}
+	return nil, nil
+}

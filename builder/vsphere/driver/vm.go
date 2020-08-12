@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/packer/packer"
+	"github.com/hashicorp/packer/template/interpolate"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/nfc"
 	"github.com/vmware/govmomi/object"
@@ -684,8 +685,6 @@ func (vm *VirtualMachine) ConvertToTemplate() error {
 }
 
 func (vm *VirtualMachine) ImportToContentLibrary(template vcenter.Template) error {
-	template.SourceVM = vm.vm.Reference().Value
-
 	l, err := vm.driver.FindContentLibrary(template.Library)
 	if err != nil {
 		return err
@@ -693,7 +692,26 @@ func (vm *VirtualMachine) ImportToContentLibrary(template vcenter.Template) erro
 	if l.library.Type != "LOCAL" {
 		return fmt.Errorf("can not deploy a VM to the content library %s of type %s; the content library must be of type LOCAL", template.Library, l.library.Type)
 	}
+
+	item, err := vm.driver.FindContentLibraryItem(l.library.ID, template.Name)
+	if err != nil {
+		return err
+	}
+
+	// Updates existing library item
+	if item != nil {
+		message, err := interpolate.Render("Packer updated the vm template at {{timestamp}}", nil)
+		if err != nil {
+			return err
+		}
+		vcm := vcenter.NewManager(vm.driver.restClient)
+		_, err = vcm.CheckIn(vm.driver.ctx, item.ID, vm.vm, &vcenter.CheckIn{Message: message})
+		return err
+	}
+
+	// Creates new library item
 	template.Library = l.library.ID
+	template.SourceVM = vm.vm.Reference().Value
 
 	if template.Placement.Cluster != "" {
 		c, err := vm.driver.FindCluster(template.Placement.Cluster)
